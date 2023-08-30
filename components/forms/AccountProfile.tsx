@@ -5,21 +5,15 @@ import {zodResolver} from "@hookform/resolvers/zod"
 import { userValidation } from "@/lib/validations/user"
 import * as z from 'zod'
 
-import { ImagePlus } from "../../node_modules/lucide-react"
+import {Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage} from "@/components/ui/form"
+import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 
-import {
-    Form,
-    FormControl,
-    FormDescription,
-    FormField,
-    FormItem,
-    FormLabel,
-    FormMessage,
-  } from "@/components/ui/form"
-
-  import { Input } from "@/components/ui/input"
-  import { Button } from "@/components/ui/button"
-  import Image from "next/image"
+import Image from "next/image"
+import { ChangeEvent, useState } from "react"
+import { Textarea } from "../ui/textarea"
+import { isBase64Image } from "@/lib/utils"
+import {useUploadThing} from "@/lib/uploadthing"
 
 interface Props {
     user:{
@@ -35,18 +29,55 @@ interface Props {
 
 const AccountProfile = ({user, btnTitle}: Props) => {
 
+    const [files, setFiles] = useState<File[]>([])
+    const {startUpload} = useUploadThing("media")
+
     const form = useForm({
         resolver: zodResolver(userValidation),
         defaultValues: {
-            profile_photo: '',
-            name: '',
-            username: '',
-            bio: ''
+            profile_photo: user?.image || "",
+            name: user?.name || "",
+            username: user?.username || "",
+            bio: user?.bio || ""
         }
     })
 
-    const onSubmit = (values: z.infer<typeof userValidation>) => {
-        console.log(values)
+    const handleImage = (e: ChangeEvent<HTMLInputElement>, fieldChange: (value: string) => void) => {
+     
+      e.preventDefault()
+      const fileReader = new FileReader()
+
+      if(e.target.files && e.target.files.length > 0) {
+        const file = e.target.files[0]
+
+        setFiles(Array.from(e.target.files))
+
+        if(!file.type.includes('image')) return
+
+        fileReader.onload = async (event) => {;
+          const imageDataUrl = event.target?.result?.toString() || "";
+
+          fieldChange(imageDataUrl)
+        }
+
+        fileReader.readAsDataURL(file)
+
+      }
+    }
+
+    const onSubmit = async (values: z.infer<typeof userValidation>) => {
+        const blob = values.profile_photo
+        const hasImageChanged = isBase64Image(blob)
+
+        if(hasImageChanged) {
+          const imgRes = await startUpload(files)
+
+          if(imgRes && imgRes[0].url) {
+            values.profile_photo = imgRes[0].url
+          }
+        }
+
+        //TODO UPDATE USER PROFILE
       }
     
   return (
@@ -54,24 +85,94 @@ const AccountProfile = ({user, btnTitle}: Props) => {
     <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col justify-start gap-10">
       <FormField
         control={form.control}
-        name="username"
+        name="profile_photo"
         render={({ field }) => (
           <FormItem className="flex items-center gap-4">
             <FormLabel className="account-form_image-label">{field.value ? 
-                <Image src={field.value} alt="profile pic" width={96} height={96} priority className="rounded-full object-contain"/> : 
-                <ImagePlus className="object-contain h-8 w-8"/>} 
+            (
+              <Image 
+              src={field.value} 
+              alt="profile photo" 
+              width={96} 
+              height={96} 
+              priority 
+              className="rounded-full object-contain"/>
+            ) : 
+            (
+              <Image 
+              src= "/assets/profile.svg"
+              alt="profile photo" 
+              width={24} 
+              height={24} 
+              className="object-contain"/> 
+            )}
             </FormLabel>
-            <FormControl>
-              <Input placeholder="shadcn" {...field} />
+            <FormControl className="flex-1 text-base-semibold text-gray-200">
+              <Input
+                type="file"
+                accept="image/*"
+                placeholder="Upload a photo"
+                className="cursor-pointer border-none bg-transparent outline-none file:text-blue"
+                onChange={(e) => handleImage(e, field.onChange)}/>
             </FormControl>
-            <FormDescription>
-              This is your public display name.
-            </FormDescription>
-            <FormMessage />
           </FormItem>
         )}
       />
-      <Button variant="destructive">Destructive</Button>
+       <FormField
+        control={form.control}
+        name="name"
+        render={({ field }) => (
+          <FormItem className="flex flex-col gap-3 w-full">
+            <FormLabel className="text-base-semibold text-light-2">
+              Name
+            </FormLabel>
+            <FormControl>
+              <Input
+                type="text"
+                className="border border-dark-4 bg-dark-3 text-light-1 no-focus"
+                {...field}  
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="username"
+        render={({ field }) => (
+          <FormItem className="flex flex-col gap-3 w-full">
+            <FormLabel className="text-base-semibold text-light-2">
+            Username
+            </FormLabel>
+            <FormControl>
+              <Input
+                type="text"
+                className="border border-dark-4 bg-dark-3 text-light-1 no-focus"
+                {...field}  
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <FormField
+        control={form.control}
+        name="bio"
+        render={({ field }) => (
+          <FormItem className="flex flex-col gap-3 w-full">
+            <FormLabel className="text-base-semibold text-light-2">
+              Bio
+            </FormLabel>
+            <FormControl>
+              <Textarea
+                rows={5}
+                className="border border-dark-4 bg-dark-3 text-light-1 no-focus resize-none"
+                {...field}  
+              />
+            </FormControl>
+          </FormItem>
+        )}
+      />
+      <Button>{btnTitle}</Button>
     </form>
   </Form>
   )
